@@ -2,39 +2,90 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
 	"net"
+	"os"
+	"os/signal"
+	"sync"
+	"sync/atomic"
+	"syscall"
 )
 
-func ListenAndServer(address string) {
-	listener, err := net.Listen("tcp", address)
+type Handler interface {
+	Handle(ctx context.Context, conn net.Conn)
+	Close() error
+}
+
+type Config struct {
+	Addr string
+}
+
+func ListenAndServer(cfg *Config, handler Handler) {
+	listener, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
 		log.Fatal(fmt.Sprintf("listen err: %v", err))
 	}
-	defer listener.Close()
+	connClose := func() {
+		_ = listener.Close()
+		_ = handler.Close()
+	}
+	defer connClose()
 
-	log.Println(fmt.Sprintf("bind: %s, start listening......", address))
+	var exitFlag int32
+	singleCh := make(chan os.Signal, 1)
+	signal.Notify(singleCh, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT)
 
+	go func() {
+		sig := <-singleCh
+		switch sig {
+		case syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT:
+			atomic.StoreInt32(&exitFlag, 1)
+			connClose()
+		}
+	}()
+	ctx, _ := context.WithCancel(context.Background())
+	var waiter sync.WaitGroup
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			if atomic.LoadInt32(&exitFlag) == 1 {
+				waiter.Wait()
+				return
+			}
 			log.Fatal(fmt.Sprintf("accept err: %v", err))
+			continue
 		}
 
-		go Handle(conn)
+		go func() {
+			defer waiter.Done()
+			waiter.Add(1)
+			handler.Handle(ctx, conn)
+		}()
 	}
 
 }
 
-func Handle(conn net.Conn) {
+type BaseHandler struct {
+	activeConn sync.Map
+	close int32
+}
+
+func (bh *BaseHandler) Handle(ctx context.Context, conn net.Conn) {
+	defer conn.Close()
+	if atomic.LoadInt32(&bh.close) == 1 {
+		return
+	}
+	bh.activeConn.Store(conn, 1)
 	reader := bufio.NewReader(conn)
 	for {
 		msg, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				log.Println("connection close")
+				bh.activeConn.Delete(conn)
 			} else {
 				log.Println(err)
 			}
@@ -45,7 +96,20 @@ func Handle(conn net.Conn) {
 	}
 }
 
+func (bh *BaseHandler) Close() error {
+	atomic.StoreInt32(&bh.close, 1)
+	bh.activeConn.Range(func(key, value interface{}) bool {
+		err := key.(net.Conn).Close()
+		if err != nil {
+			log.Fatalln(err)
+			return false
+		}
+		return true
+	})
+	return nil
+}
+
 
 func main()  {
-	ListenAndServer(":8080")
+	ListenAndServer(&Config{":8080"}, &BaseHandler{})
 }
