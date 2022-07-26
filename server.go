@@ -70,7 +70,7 @@ func ListenAndServer(cfg *Config, handler Handler) {
 
 type BaseHandler struct {
 	activeConn sync.Map
-	close int32
+	close      int32
 }
 
 func (bh *BaseHandler) Handle(ctx context.Context, conn net.Conn) {
@@ -109,7 +109,6 @@ func (bh *BaseHandler) Close() error {
 	return nil
 }
 
-
-func main()  {
+func main() {
 	ListenAndServer(&Config{":8080"}, &BaseHandler{})
 }
