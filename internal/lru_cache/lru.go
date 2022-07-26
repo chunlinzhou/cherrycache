@@ -68,8 +68,7 @@ func (c *LRUCache) set(key string, value interface{}, expire int) {
 }
 
 func (c *LRUCache) Get(key string) interface{} {
-	c.RLock()
-	defer c.RUnlock()
+
 	if elm, ok := c.cache[key]; ok {
 
 		v := elm.Value.(*Item)
@@ -78,7 +77,9 @@ func (c *LRUCache) Get(key string) interface{} {
 			c.Del(key)
 			return nil
 		}
+		c.RLock()
 		c.nodeList.MoveToFront(elm)
+		c.RUnlock()
 		return elm.Value.(*Item).Value
 	}
 	return nil

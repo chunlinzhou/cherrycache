@@ -2,6 +2,7 @@ package lrucache
 
 import (
 	"testing"
+	"time"
 )
 
 func TestLRUCache(t *testing.T) {
@@ -14,5 +15,11 @@ func TestLRUCache(t *testing.T) {
 	lru.Set("hello5", "world")
 
 	t.Log(lru.Get("hello") == nil)
+
+	lru.SetWithTTL("hello1", "world", 3)
+
+	t.Log(lru.Get("hello1"))
+	time.Sleep(4 * time.Second)
+	t.Log(lru.Get("hello1") == nil)
 
 }
