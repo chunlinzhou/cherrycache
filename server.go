@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -26,7 +25,7 @@ type Config struct {
 func ListenAndServer(cfg *Config, handler Handler) {
 	listener, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("listen err: %v", err))
+		log.Fatalf("listen err: %v", err)
 	}
 	connClose := func() {
 		_ = listener.Close()
@@ -55,7 +54,7 @@ func ListenAndServer(cfg *Config, handler Handler) {
 				waiter.Wait()
 				return
 			}
-			log.Fatal(fmt.Sprintf("accept err: %v", err))
+			log.Fatalf("accept err: %v", err)
 			continue
 		}
 
