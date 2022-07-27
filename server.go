@@ -44,7 +44,8 @@ func ListenAndServer(cfg *Config, handler Handler) {
 			connClose()
 		}
 	}()
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancle := context.WithCancel(context.Background())
+	defer cancle()
 	var waiter sync.WaitGroup
 	for {
 		conn, err := listener.Accept()
